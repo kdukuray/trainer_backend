@@ -78,9 +78,11 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "config.wsgi.application"
 
-# Database — Supabase PostgreSQL via DATABASE_URL, falling back to SQLite
+# Database — Supabase PostgreSQL via DATABASE_URL, falling back to SQLite.
+# Set USE_SQLITE=1 in .env to force SQLite (e.g. when Postgres is not running locally).
+USE_SQLITE = os.getenv("USE_SQLITE", "").lower() in ("1", "true", "yes")
 DATABASE_URL = os.getenv("DATABASE_URL")
-if DATABASE_URL:
+if DATABASE_URL and not USE_SQLITE:
     DATABASES = {"default": dj_database_url.parse(DATABASE_URL)}
 else:
     DATABASES = {

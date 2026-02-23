@@ -118,7 +118,7 @@ def analyze_meal_image(request):
         image_part = genai.types.Part.from_bytes(data=image_bytes, mime_type=content_type)
 
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model="gemini-2.5-flash",
             contents=[CALORIE_SYSTEM_PROMPT, image_part],
         )
         raw_text = response.text.strip()

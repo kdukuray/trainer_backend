@@ -1,15 +1,34 @@
 """
 Supabase JWT authentication backend for Django REST Framework.
 
-Decodes the access token from the Authorization header using the project's
-JWT secret, then looks up (or auto-creates) a UserProfile row so every
-authenticated request has ``request.user`` set to a lightweight user object.
+Verifies access tokens from the Authorization header using the project's
+JWKS endpoint (for ES256 / ECC P-256 keys) with a fallback to the legacy
+HS256 shared secret. Attaches a lightweight ``SupabaseUser`` to
+``request.user`` on success.
 """
+
+import logging
 
 import jwt
 from django.conf import settings
 from rest_framework.authentication import BaseAuthentication
 from rest_framework.exceptions import AuthenticationFailed
+
+logger = logging.getLogger(__name__)
+
+_jwks_client: jwt.PyJWKClient | None = None
+
+
+def _get_jwks_client() -> jwt.PyJWKClient:
+    """
+    Lazily initialise and return a cached PyJWKClient for the Supabase JWKS
+    endpoint. The client caches keys internally (default 5 min lifespan).
+    """
+    global _jwks_client
+    if _jwks_client is None:
+        jwks_url = f"{settings.SUPABASE_URL}/auth/v1/.well-known/jwks.json"
+        _jwks_client = jwt.PyJWKClient(jwks_url, cache_keys=True, lifespan=300)
+    return _jwks_client
 
 
 class SupabaseUser:
@@ -39,7 +58,8 @@ class SupabaseJWTAuthentication(BaseAuthentication):
     Authenticate incoming requests by verifying Supabase-issued JWTs.
 
     Expects the header: ``Authorization: Bearer <access_token>``
-    Validates using the ``SUPABASE_JWT_SECRET`` from settings.
+    Resolves the signing key from the project's JWKS endpoint, falling back
+    to the ``SUPABASE_JWT_SECRET`` for legacy HS256 tokens.
     Returns a ``(SupabaseUser, token)`` tuple on success.
     """
 
@@ -65,19 +85,18 @@ class SupabaseJWTAuthentication(BaseAuthentication):
 
         token = auth_header[len(self.keyword) + 1 :]
 
-        if not settings.SUPABASE_JWT_SECRET:
-            raise AuthenticationFailed("Server JWT secret is not configured.")
-
         try:
+            signing_key, algorithms = self._resolve_signing_key(token)
             payload = jwt.decode(
                 token,
-                settings.SUPABASE_JWT_SECRET,
-                algorithms=["HS256"],
+                signing_key,
+                algorithms=algorithms,
                 audience="authenticated",
             )
         except jwt.ExpiredSignatureError:
             raise AuthenticationFailed("Token has expired.")
         except jwt.InvalidTokenError as exc:
+            logger.error("JWT verification failed: %s", exc)
             raise AuthenticationFailed(f"Invalid token: {exc}")
 
         user_id = payload.get("sub")
@@ -88,3 +107,31 @@ class SupabaseJWTAuthentication(BaseAuthentication):
         user = SupabaseUser(uid=user_id, email=email)
 
         return (user, payload)
+
+    def _resolve_signing_key(self, token: str):
+        """
+        Determine the correct key and algorithm(s) for verifying *token*.
+
+        Tries the JWKS endpoint first (handles ES256 / ECC keys). Falls back
+        to the legacy ``SUPABASE_JWT_SECRET`` for HS256 tokens when JWKS
+        lookup fails (e.g. token has no ``kid`` header).
+
+        Returns:
+            Tuple of (key, algorithm_list).
+        """
+        header = jwt.get_unverified_header(token)
+        alg = header.get("alg", "")
+
+        if header.get("kid") and settings.SUPABASE_URL:
+            try:
+                jwk = _get_jwks_client().get_signing_key_from_jwt(token)
+                return jwk.key, [alg]
+            except jwt.PyJWKClientError as exc:
+                logger.warning("JWKS key lookup failed, trying legacy secret: %s", exc)
+
+        if not settings.SUPABASE_JWT_SECRET:
+            raise AuthenticationFailed(
+                "JWT verification failed: no JWKS key found and no legacy secret configured."
+            )
+
+        return settings.SUPABASE_JWT_SECRET, ["HS256", "HS384", "HS512"]
