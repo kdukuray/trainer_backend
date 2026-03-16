@@ -4,8 +4,6 @@ WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
-# Tell uv to install into the system Python instead of creating a venv.
-ENV UV_SYSTEM_PYTHON=1
 
 # Install system dependencies required by opencv-python-headless on slim images
 RUN apt-get update && apt-get install -y --no-install-recommends \
