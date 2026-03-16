@@ -18,3 +18,20 @@ dependencies = [
     "supabase",
     "ultralytics>=8.4.14",
 ]
+
+# Use CPU-only PyTorch builds to keep the image lean for deployment.
+# This prevents ultralytics from pulling the multi-gigabyte CUDA build.
+[tool.uv]
+constraint-dependencies = [
+    "torch==2.2.2",
+    "torchvision==0.17.2",
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+torchvision = { index = "pytorch-cpu" }

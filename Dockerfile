@@ -4,10 +4,15 @@ WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+# Tell uv to install into the system Python instead of creating a venv.
+ENV UV_SYSTEM_PYTHON=1
 
-# Install system dependencies
+# Install system dependencies required by opencv-python-headless on slim images
 RUN apt-get update && apt-get install -y --no-install-recommends \
     postgresql-client \
+    libgl1 \
+    libglib2.0-0 \
+    libxcb1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Install uv for faster dependency management
@@ -16,7 +21,9 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 # Copy dependency files
 COPY pyproject.toml uv.lock ./
 
-# Install dependencies + gunicorn
+# Install dependencies + gunicorn.
+# pyproject.toml pins torch/torchvision to the CPU-only PyTorch index,
+# so uv will never pull the multi-gigabyte CUDA build.
 RUN uv sync --frozen --no-dev && \
     uv pip install gunicorn
 
@@ -31,5 +38,6 @@ EXPOSE 8000
 ENTRYPOINT ["./entrypoint.prod.sh"]
 
 # Production server with Gunicorn
-# Uses WEB_CONCURRENCY env var if set (Render sets this), otherwise 4 workers
-CMD ["uv", "run", "gunicorn", "--bind", "0.0.0.0:8000", "--workers", "4", "--timeout", "120", "config.wsgi:application"]
+# Uses WEB_CONCURRENCY env var if set (Render sets this), otherwise 2 workers
+# (keeping workers low avoids OOM on Render's starter instances)
+CMD ["uv", "run", "gunicorn", "--bind", "0.0.0.0:8000", "--workers", "2", "--timeout", "120", "config.wsgi:application"]
