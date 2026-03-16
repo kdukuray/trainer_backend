@@ -19,11 +19,10 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 # Copy dependency files
 COPY pyproject.toml uv.lock ./
 
-# Install dependencies + gunicorn.
+# Install dependencies (gunicorn is included in pyproject.toml).
 # pyproject.toml pins torch/torchvision to the CPU-only PyTorch index,
 # so uv will never pull the multi-gigabyte CUDA build.
-RUN uv sync --frozen --no-dev && \
-    uv pip install gunicorn
+RUN uv sync --frozen --no-dev
 
 COPY . .
 
