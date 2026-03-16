@@ -24,6 +24,13 @@ class UserProfile(models.Model):
         MESOMORPH = "mesomorph", "Mesomorph"
         ENDOMORPH = "endomorph", "Endomorph"
 
+    class Timeline(models.TextChoices):
+        ONE_MONTH = "1_month", "1 Month"
+        THREE_MONTHS = "3_months", "3 Months"
+        SIX_MONTHS = "6_months", "6 Months"
+        ONE_YEAR = "1_year", "1 Year"
+        TWO_PLUS_YEARS = "2_plus_years", "2+ Years"
+
     # Supabase auth UUID used directly as PK — no FK to Django's User model
     user_id = models.CharField(max_length=255, primary_key=True)
     display_name = models.CharField(max_length=150, blank=True, default="")
@@ -53,8 +60,28 @@ class UserProfile(models.Model):
         default="",
     )
 
+    # Personal info for AI-driven recommendations
+    weight = models.DecimalField(
+        max_digits=5, decimal_places=1, null=True, blank=True,
+        help_text="Weight in lbs",
+    )
+    height = models.DecimalField(
+        max_digits=4, decimal_places=1, null=True, blank=True,
+        help_text="Height in inches",
+    )
+    timeline = models.CharField(
+        max_length=20,
+        choices=Timeline.choices,
+        blank=True,
+        default="",
+    )
+
     # Education rank: 1 = Beginner, 2 = Intermediate, 3 = Advanced. 0 = not yet tested.
     knowledge_rank = models.IntegerField(default=0)
+
+    # AI-generated fitness recommendations
+    recommended_daily_calories = models.IntegerField(null=True, blank=True)
+    recommended_weekly_workouts = models.IntegerField(null=True, blank=True)
 
     calorie_target = models.IntegerField(default=2000)
     protein_target = models.IntegerField(default=150, help_text="Grams per day")

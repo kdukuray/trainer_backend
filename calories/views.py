@@ -21,7 +21,16 @@ from common.pagination import CursorPagination
 from .models import MealLog
 from .serializers import MealLogDetailSerializer, MealLogListSerializer
 
+from django.utils.dateparse import parse_datetime
+
 logger = logging.getLogger(__name__)
+
+
+def _parse_iso_datetime(value: str):
+    """Parse an ISO 8601 datetime string, normalising the 'Z' suffix Django may not handle."""
+    if value.endswith("Z"):
+        value = value[:-1] + "+00:00"
+    return parse_datetime(value)
 
 CALORIE_SYSTEM_PROMPT = """You are a nutrition analysis AI. Analyze the food in this image.
 Identify each food item, estimate portion sizes, and provide a structured response.
@@ -170,11 +179,27 @@ def list_meal_logs(request):
 
     Query params:
         cursor: ID of the last item from the previous page.
+        logged_after: ISO 8601 datetime — only return logs at or after this time.
+        logged_before: ISO 8601 datetime — only return logs before this time.
 
     Returns:
         200: { results, next_cursor, has_more }
     """
     queryset = MealLog.objects.filter(user_id=request.user.id).order_by("-id")
+
+    logged_after = request.query_params.get("logged_after")
+    logged_before = request.query_params.get("logged_before")
+
+    if logged_after:
+        parsed = _parse_iso_datetime(logged_after)
+        if parsed:
+            queryset = queryset.filter(logged_at__gte=parsed)
+
+    if logged_before:
+        parsed = _parse_iso_datetime(logged_before)
+        if parsed:
+            queryset = queryset.filter(logged_at__lt=parsed)
+
     paginator = CursorPagination()
     page = paginator.paginate_queryset(queryset, request)
     serializer = MealLogListSerializer(page, many=True)

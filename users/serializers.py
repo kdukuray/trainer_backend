@@ -22,12 +22,23 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "dietary_preferences",
             "current_body_type",
             "goal_body_type",
+            "weight",
+            "height",
+            "timeline",
             "knowledge_rank",
             "calorie_target",
             "protein_target",
             "carbs_target",
             "fat_target",
+            "recommended_daily_calories",
+            "recommended_weekly_workouts",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["user_id", "created_at", "updated_at"]
+        read_only_fields = [
+            "user_id",
+            "recommended_daily_calories",
+            "recommended_weekly_workouts",
+            "created_at",
+            "updated_at",
+        ]
